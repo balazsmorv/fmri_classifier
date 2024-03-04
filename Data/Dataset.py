@@ -25,7 +25,8 @@ class LatentFMRIDataset(Dataset):
         all_data = np.ndarray(shape=(self.__len__(), 4, 16, 18))
         for i, ind in enumerate(self.labels_df.index):
             file_id = self.labels_df['FILE_ID'][ind]
-            all_data[i] = np.load(file=os.path.join(self.data_dir, f'{file_id}.npy'))
+            timestep = self.labels_df['TIME_SLICE'][ind]
+            all_data[i] = np.load(file=os.path.join(self.data_dir, f'{file_id}-{timestep}.npy'))
         all_labels = self.labels_df['DX_GROUP'].to_numpy(dtype=int)
         return {
             'X': all_data,
