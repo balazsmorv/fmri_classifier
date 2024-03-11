@@ -24,7 +24,7 @@ def perform_experiment_train_on_whole_test_on_UM1(kernel: str = 'rbf'):
     X_train = np.concatenate((nyu_X_train, um1_X_train))
     y_train = np.concatenate((nyu_y_train, um1_y_train))
 
-    mlflow.set_experiment(f"({datetime.now()})Train:NYU+UM1,test:UM1")
+    mlflow.set_experiment(f"({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})Train:NYU+UM1,test:UM1")
     for c in np.arange(start=0.01, stop=5, step=0.5):
         with mlflow.start_run():
             train_and_test_svm(train_set='NYU+UM1', train_dir=f'{nyu_dataset_directory} + {um1_dataset_directory}',
@@ -99,5 +99,5 @@ def train_and_test_svm(train_set: str, train_dir: str, test_set: str, test_dir: 
 
 
 if __name__ == '__main__':
-    #perform_experiment_train_on_whole_test_on_UM1()
-    grid_search_all_datasets(kernel='linear')
+    perform_experiment_train_on_whole_test_on_UM1(kernel='linear')
+    #grid_search_all_datasets(kernel='linear')

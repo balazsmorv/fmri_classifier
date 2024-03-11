@@ -32,3 +32,12 @@ class LatentFMRIDataset(Dataset):
             'X': all_data,
             'y': all_labels
         }
+
+    def get_items_from_class(self, cls: int):
+        all_items = self.get_all_items()
+        all_x = all_items['X']
+        all_y = all_items['y']
+        return {
+            'X': all_x[all_y == cls],
+            'y': all_y[all_y == cls]
+        }
