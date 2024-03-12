@@ -9,10 +9,13 @@ import mlflow
 from datetime import datetime
 mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")
 
+# Constants
+nyu_dataset_directory = '/Users/balazsmorvay/PycharmProjects/VAE/Assets/NYU_all'
+um1_dataset_directory = '/Users/balazsmorvay/PycharmProjects/VAE/Assets/UM_1_all'
+merged_set_directory = '/Users/balazsmorvay/PycharmProjects/VAE/Assets/NYU_UM1_merged'
 
-def perform_experiment_train_on_whole_test_on_UM1(kernel: str = 'rbf'):
-    nyu_dataset_directory = '/Users/balazsmorvay/PycharmProjects/VAE/Assets/NYU_all'
-    um1_dataset_directory = '/Users/balazsmorvay/PycharmProjects/VAE/Assets/UM_1_all'
+
+def perform_experiment_train_on_both_test_on_UM1(kernel: str = 'rbf'):
     test_ratio = 0.15
 
     nyu_data = LatentFMRIDataset(data_dir=nyu_dataset_directory).get_all_items()
@@ -31,10 +34,26 @@ def perform_experiment_train_on_whole_test_on_UM1(kernel: str = 'rbf'):
                                test_set='UM1', test_dir=um1_dataset_directory, test_ratio=test_ratio, X_train=X_train,
                                X_test=X_test, y_train=y_train, y_test=y_test, kernel=kernel, c=c)
 
+
+def perform_experiment(train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, kernel: str = 'rbf'):
+    test_ratio = 0.15
+
+    train_data = LatentFMRIDataset(data_dir=train_dir).get_all_items()
+    X_train, y_train = train_data['X'], train_data['y']
+
+    test_data = LatentFMRIDataset(data_dir=test_dir).get_all_items()
+    X_test, y_test = test_data['X'], test_data['y']
+
+    mlflow.set_experiment(f"({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})Train:{train_site_name},test:{test_site_name}")
+    for c in np.arange(start=0.01, stop=5, step=0.5):
+        with mlflow.start_run():
+            train_and_test_svm(train_set=train_site_name, train_dir=train_dir,test_set=test_site_name,
+                               test_dir=test_dir, test_ratio=test_ratio, X_train=X_train, X_test=X_test,
+                               y_train=y_train, y_test=y_test, kernel=kernel, c=c)
+
+
 def grid_search_all_datasets(kernel: str = 'rbf'):
-    data_directories = ['/Users/balazsmorvay/PycharmProjects/VAE/Assets/UM_1_all',
-                        '/Users/balazsmorvay/PycharmProjects/VAE/Assets/NYU_all',
-                        '/Users/balazsmorvay/PycharmProjects/VAE/Assets/NYU_UM1_merged']
+    data_directories = [um1_dataset_directory, nyu_dataset_directory, merged_set_directory]
     dataset_names = ['UM_1', 'NYU', 'UM1+NYU']
     test_ratio = 0.15
     experiment_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -99,5 +118,19 @@ def train_and_test_svm(train_set: str, train_dir: str, test_set: str, test_dir: 
 
 
 if __name__ == '__main__':
-    perform_experiment_train_on_whole_test_on_UM1(kernel='linear')
-    #grid_search_all_datasets(kernel='linear')
+
+    # Train on NYU, test on UM1
+    perform_experiment(train_dir=nyu_dataset_directory, train_site_name='NYU',
+                       test_dir=um1_dataset_directory, test_site_name='UM1',
+                       kernel='rbf')
+
+    # Train on UM1, test on NYU
+    perform_experiment(train_dir=um1_dataset_directory, train_site_name='UM1',
+                       test_dir=nyu_dataset_directory, test_site_name='NYU',
+                       kernel='rbf')
+
+    # Train on UM1+NYU, test on UM1
+    # perform_experiment_train_on_both_test_on_UM1(kernel='linear')
+
+    # Train and test on same sites
+    # grid_search_all_datasets(kernel='linear')
