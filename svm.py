@@ -115,6 +115,7 @@ def train_and_test_svm(train_set: str, train_dir: str, test_set: str, test_dir: 
         'precision': (tp / (tp + fp + 1e-6))
     }
     mlflow.log_metrics(metrics, synchronous=True)
+    return model
 
 
 if __name__ == '__main__':

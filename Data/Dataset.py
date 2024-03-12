@@ -2,13 +2,17 @@ import os
 from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
+from sklearn.decomposition import PCA
 
 class LatentFMRIDataset(Dataset):
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, reduced_dim = None):
         super().__init__()
         self.data_dir = data_dir
         self.labels_df = pd.read_csv(filepath_or_buffer=os.path.join(self.data_dir, 'labels.csv'))
+        self.reduced_dim = reduced_dim
+        if self.reduced_dim is not None:
+            self.pca = PCA(n_components=reduced_dim)
 
     def __len__(self):
         return len(self.labels_df)
@@ -28,8 +32,9 @@ class LatentFMRIDataset(Dataset):
             timestep = self.labels_df['TIME_SLICE'][ind]
             all_data[i] = np.load(file=os.path.join(self.data_dir, f'{file_id}-{timestep}.npy'))
         all_labels = self.labels_df['DX_GROUP'].to_numpy(dtype=int)
+        normalized_data = (all_data - all_data.min()) / (all_data.max() - all_data.min())
         return {
-            'X': all_data,
+            'X': normalized_data if self.reduced_dim is None else self.pca.fit_transform(normalized_data.reshape((normalized_data.shape[0], -1))),
             'y': all_labels
         }
 
