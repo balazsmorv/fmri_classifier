@@ -1,13 +1,12 @@
 import numpy as np
 import os
-from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from Data.Dataset import LatentFMRIDataset
 import matplotlib.pyplot as plt
 import mlflow
-from einops import rearrange
 from datetime import datetime
+from scipy.linalg import orthogonal_procrustes
 mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")
 
 
@@ -166,7 +165,7 @@ class SVMRidgeRegression(SVMExperimentWithLogging):
             [X_test_ones[0:self.number_of_train_data_points], X_test_twos[0:self.number_of_train_data_points]])
 
         I = np.ones(1152)
-        W = np.linalg.solve(a=X.T @ X + self.lambda_ * I, b=X.T @ Y)
+        W = np.linalg.solve(a=X.T @ X + self.lambda_ * I, b=X.T @ Y) # p*p size matrix
         return W
 
     def train_svm(self, X_train, y_train, c: int):
@@ -179,9 +178,35 @@ class SVMRidgeRegression(SVMExperimentWithLogging):
 
 
 
+class SVMProcrustes(SVMExperimentWithLogging):
 
+    number_of_train_data_points = None
+    experiment_description = 'Orthogonal Procrustes'
 
+    def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
+                 kernel: str = 'rbf',
+                 test_ratio: int = 0.15, log_path='/Users/balazsmorvay/PycharmProjects/fmri_classifier/Experiments'):
+        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio, log_path)
 
+    def transform_data(self, train_data, test_data):
+        X_train, y_train, X_test, y_test = super().transform_data(train_data, test_data)
+
+        X_train_ones = X_train[y_train == 1]
+        X_train_twos = X_train[y_train == 2]
+        X_test_ones = X_test[y_test == 1]
+        X_test_twos = X_test[y_test == 2]
+        self.number_of_train_data_points = np.min([X_train_ones.shape[0],
+                                                   X_test_ones.shape[0],
+                                                   X_train_twos.shape[0],
+                                                   X_test_twos.shape[0]])
+        print(f'{self.number_of_train_data_points} data points from each class are used for procrustes')
+        Target_matrix = np.concatenate(
+            [X_train_ones[0:self.number_of_train_data_points], X_train_twos[0:self.number_of_train_data_points]])
+        Matrix_to_be_mapped = np.concatenate(
+            [X_test_ones[0:self.number_of_train_data_points], X_test_twos[0:self.number_of_train_data_points]])
+        R, scale = orthogonal_procrustes(A=Matrix_to_be_mapped, B=Target_matrix)
+
+        return X_train, y_train, X_test @ R, y_test
 
 
 
