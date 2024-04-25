@@ -208,8 +208,30 @@ class SVMProcrustes(SVMExperimentWithLogging):
 
         return X_train, y_train, X_test @ R, y_test
 
+        
+class SVMAffine(SVMExperiment):
+    experiment_description = "A@nyu + b affine"
+    def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
+                 A1, b1, A2, b2, kernel: str = 'rbf',
+                 test_ratio: int = 0.15, log_path='/Users/balazsmorvay/PycharmProjects/fmri_classifier/Experiments'):
+        self.A1 = A1
+        self.b1 = b1
+        self.A2 = A2
+        self.b2 = b2
+        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio, log_path)
 
+    def transform_data(self, train_data, test_data):
+        X_train, y_train, X_test, y_test = super().transform_data(train_data, test_data)
+        X_train_ones = X_train[y_train == 1]
+        X_train_twos = X_train[y_train == 2]
+        # Transform the train set, do not transform the test set
+        X_train_ones = self.A1.dot(X_train_ones.transpose()) + self.b1
+        X_train_twos = self.A2.dot(X_train_twos.transpose()) + self.b2
+        X_train = np.concatenate([X_train_ones.T, X_train_twos.T])
 
+        print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
+
+        return X_train, y_train, X_test, y_test
 
 
 
