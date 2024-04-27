@@ -178,7 +178,7 @@ class SVMRidgeRegression(SVMExperimentWithLogging):
 
 
 
-class SVMProcrustes(SVMExperimentWithLogging):
+class SVMProcrustes(SVMExperiment):
 
     number_of_train_data_points = None
     experiment_description = 'Orthogonal Procrustes'

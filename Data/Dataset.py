@@ -42,7 +42,4 @@ class LatentFMRIDataset(Dataset):
         all_items = self.get_all_items()
         all_x = all_items['X']
         all_y = all_items['y']
-        return {
-            'X': all_x[all_y == cls],
-            'y': all_y[all_y == cls]
-        }
+        return all_x[all_y == cls]
