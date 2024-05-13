@@ -7,13 +7,17 @@ import matplotlib.pyplot as plt
 import mlflow
 from datetime import datetime
 from scipy.linalg import orthogonal_procrustes
+
+from SVMLogger import SVMLogger
+
 mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")
 
 
 class SVMExperiment:
 
-    def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int], kernel: str = 'rbf',
-                 test_ratio: int = 0.15, log_path = '/Users/balazsmorvay/PycharmProjects/fmri_classifier/Experiments'):
+    def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
+                 kernel: str = 'rbf', test_ratio: int = 0.15, logger = SVMLogger(), experiment_description='',
+                 data_shape = (4, 16, 18)):
         self.train_dir = train_dir
         self.test_dir = test_dir
         self.train_site_name = train_site_name
@@ -21,15 +25,17 @@ class SVMExperiment:
         self.kernel = kernel
         self.test_ratio = test_ratio
         self.c_values = c_values
-        self.log_path = log_path
+        self.logger = logger
+        self.experiment_description = experiment_description
+        self.data_shape = data_shape
         self.models = []
         self.metrics = []
 
         self.X_train, self.y_train, self.X_test, self.y_test = self.setup_data()
 
     def setup_data(self):
-        train_data = LatentFMRIDataset(data_dir=self.train_dir).get_all_items()
-        test_data = LatentFMRIDataset(data_dir=self.test_dir).get_all_items()
+        train_data = LatentFMRIDataset(data_dir=self.train_dir, data_shape=self.data_shape).get_all_items()
+        test_data = LatentFMRIDataset(data_dir=self.test_dir, data_shape=self.data_shape).get_all_items()
         return self.transform_data(train_data, test_data)
 
     def transform_data(self, train_data, test_data):
@@ -40,24 +46,35 @@ class SVMExperiment:
         return X_train, y_train, X_test, y_test
 
     def perform_experiment(self):
+        self.logger.before_experiment(train_site_name=self.train_site_name, test_site_name=self.test_site_name,
+                                   experiment_description=self.experiment_description)
+
         for c in self.c_values:
             self.train_and_test(self.X_train, self.y_train, self.X_test, self.y_test, c=c)
 
+        self.logger.after_experiment()
+
     def train_and_test(self, X_train, y_train, X_test, y_test, c):
+        self.logger.before_train_and_test(c=c, kernel=self.kernel)
         trained_svm = self.train_svm(X_train=X_train, y_train=y_train, c=c)
         self.models.append(trained_svm)
         metrics = self.test_svm(model=trained_svm, X_test=X_test, y_test=y_test)
         self.metrics.append(metrics)
+        self.logger.after_train_and_test(c=c, kernel=self.kernel, models=self.models, metrics=self.metrics)
 
     def train_svm(self, X_train, y_train, c: int):
+        self.logger.before_train(train_site_name=self.train_site_name, test_site_name=self.test_site_name,
+                                 train_dir=self.train_dir, test_dir=self.test_dir, test_ratio=self.test_ratio,
+                                 train_labels_mean=np.mean(y_train), c=c, kernel=self.kernel, experiment_description=self.experiment_description)
         model = SVC(kernel=self.kernel, C=c, class_weight='balanced', random_state=42, verbose=True)
         model.fit(X=X_train, y=y_train)
         return model
 
     def test_svm(self, model, X_test, y_test):
+        self.logger.before_test(test_labels_mean=np.mean(y_test))
         test_predictions = model.predict(X_test)
         cm = confusion_matrix(y_test, test_predictions, labels=model.classes_)
-        self.make_confusion_matrix_image(cm, model)
+        self.logger.make_confusion_matrix_image(cm=cm, model=model)
         tn, fp, fn, tp = cm.ravel()
         metrics = {
             'accuracy': ((tp + tn) / (tp + tn + fp + fn + 1e-6)),
@@ -66,83 +83,17 @@ class SVMExperiment:
         }
         return metrics
 
-    def make_confusion_matrix_image(self, cm, model):
-        display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
-        display.plot()
 
-
-
-
-
-class SVMExperimentWithLogging(SVMExperiment):
-
-    experiment_description = ''
-
-    def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
-                 kernel: str = 'rbf',
-                 test_ratio: int = 0.15, log_path='/Users/balazsmorvay/PycharmProjects/fmri_classifier/Experiments'):
-        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio, log_path)
-        self.current_experiment_path = None
-
-    def perform_experiment(self):
-        experiment_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        mlflow.set_experiment(
-            f"{experiment_time};Train:{self.train_site_name},test:{self.test_site_name},extra:{self.experiment_description}"
-        )
-        super().perform_experiment()
-
-    def train_and_test(self, X_train, y_train, X_test, y_test, c):
-        with mlflow.start_run():
-            experiment_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            experiment_name = f"{experiment_time};c={c},ker={self.kernel}"
-            mlflow.set_tag("mlflow.runName", experiment_name)
-            experiment_path = os.path.join(self.log_path, experiment_name)
-            os.mkdir(path=experiment_path)
-            self.current_experiment_path = experiment_path
-
-            super().train_and_test(X_train, y_train, X_test, y_test, c)
-
-            mlflow.sklearn.log_model(self.models[-1], experiment_name)
-            mlflow.log_metrics(self.metrics[-1], synchronous=True)
-
-    def train_svm(self, X_train, y_train, c: int):
-        mlflow_tracking_params = {
-            'Train site': self.train_site_name,
-            'Train directory': self.train_dir,
-            'Test site': self.test_site_name,
-            'Test directory': self.test_dir,
-            'Test_ratio': self.test_ratio,
-            'Train_labels_mean': np.mean(y_train),
-            'C': c,
-            'Kernel': self.kernel,
-            'extra info': self.experiment_description
-        }
-        mlflow.log_params(params=mlflow_tracking_params, synchronous=True)
-        return super().train_svm(X_train, y_train, c)
-
-    def test_svm(self, model, X_test, y_test) -> dict:
-        mlflow.log_param(key='Test_labels_mean', value=np.mean(y_test))
-        return super().test_svm(model, X_test, y_test)
-
-    def make_confusion_matrix_image(self, cm, model):
-        display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
-        display.plot().figure_.savefig(os.path.join(self.current_experiment_path, 'confusion_matrix.png'))
-        plt.close('all')
-        mlflow.log_artifact(os.path.join(self.current_experiment_path, 'confusion_matrix.png'))
-
-
-
-
-class SVMRidgeRegression(SVMExperimentWithLogging):
+class SVMRidgeRegression(SVMExperiment):
 
     experiment_description = 'Ridge Regression Transform'
 
     def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
                  lambda_: float, number_of_train_data_points=None, kernel: str = 'rbf',
-                 test_ratio: int = 0.15, log_path='/Users/balazsmorvay/PycharmProjects/fmri_classifier/Experiments'):
+                 test_ratio: int = 0.15):
         self.lambda_ = lambda_
         self.number_of_train_data_points = number_of_train_data_points
-        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio, log_path)
+        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio)
 
     def transform_data(self, train_data, test_data):
         X_train, y_train, X_test, y_test = super().transform_data(train_data, test_data)
@@ -185,8 +136,8 @@ class SVMProcrustes(SVMExperiment):
 
     def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
                  kernel: str = 'rbf',
-                 test_ratio: int = 0.15, log_path='/Users/balazsmorvay/PycharmProjects/fmri_classifier/Experiments'):
-        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio, log_path)
+                 test_ratio: int = 0.15):
+        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio)
 
     def transform_data(self, train_data, test_data):
         X_train, y_train, X_test, y_test = super().transform_data(train_data, test_data)
@@ -210,15 +161,15 @@ class SVMProcrustes(SVMExperiment):
 
         
 class SVMAffine(SVMExperiment):
-    experiment_description = "A@nyu + b affine"
     def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
-                 A1, b1, A2, b2, kernel: str = 'rbf',
-                 test_ratio: int = 0.15, log_path='/Users/balazsmorvay/PycharmProjects/fmri_classifier/Experiments'):
+                 A1, b1, A2, b2, kernel: str = 'rbf', test_ratio: int = 0.15, logger = SVMLogger(),
+                 experiment_description="A@nyu + b affine", data_shape=(4, 16, 18)):
         self.A1 = A1
         self.b1 = b1
         self.A2 = A2
         self.b2 = b2
-        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio, log_path)
+        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio, logger,
+                         experiment_description=experiment_description, data_shape=data_shape)
 
     def transform_data(self, train_data, test_data):
         X_train, y_train, X_test, y_test = super().transform_data(train_data, test_data)
@@ -229,7 +180,9 @@ class SVMAffine(SVMExperiment):
         X_train_twos = self.A2.dot(X_train_twos.transpose()) + self.b2
         X_train = np.concatenate([X_train_ones.T, X_train_twos.T])
 
-        print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
+        y_train_ones = np.ones(shape=X_train_ones.shape[1])
+        y_train_twos = np.ones(shape=X_train_twos.shape[1]) + 1
+        y_train = np.concatenate([y_train_ones, y_train_twos])
 
         return X_train, y_train, X_test, y_test
 
