@@ -15,9 +15,10 @@ mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")
 
 class SVMExperiment:
 
-    def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
-                 kernel: str = 'rbf', test_ratio: int = 0.15, logger = SVMLogger(), experiment_description='',
-                 data_shape = (4, 16, 18)):
+    def __init__(self, train_site_name: str,
+                 test_site_name: str, c_values: [int], kernel: str = 'rbf', test_ratio: int = 0.15,
+                 logger = SVMLogger(), experiment_description='', data_shape = (4, 16, 18), X_train = None,
+                 y_train = None, X_test = None, y_test = None, train_dir: str = None, test_dir: str = None):
         self.train_dir = train_dir
         self.test_dir = test_dir
         self.train_site_name = train_site_name
@@ -31,18 +32,21 @@ class SVMExperiment:
         self.models = []
         self.metrics = []
 
-        self.X_train, self.y_train, self.X_test, self.y_test = self.setup_data()
+        if X_train is None:
+            self.X_train, self.y_train, self.X_test, self.y_test = self.setup_data()
+        else:
+            self.X_train, self.y_train, self.X_test, self.y_test = self.transform_data(X_train, y_train, X_test, y_test)
 
     def setup_data(self):
         train_data = LatentFMRIDataset(data_dir=self.train_dir, data_shape=self.data_shape).get_all_items()
         test_data = LatentFMRIDataset(data_dir=self.test_dir, data_shape=self.data_shape).get_all_items()
-        return self.transform_data(train_data, test_data)
-
-    def transform_data(self, train_data, test_data):
         X_train, y_train = train_data['X'], train_data['y']
         X_test, y_test = test_data['X'], test_data['y']
         X_train = X_train.reshape((X_train.shape[0], -1))
         X_test = X_test.reshape((X_test.shape[0], -1))
+        return X_train, y_train, X_test, y_test
+
+    def transform_data(self, X_train, y_train, X_test, y_test):
         return X_train, y_train, X_test, y_test
 
     def perform_experiment(self):
@@ -84,53 +88,49 @@ class SVMExperiment:
         return metrics
 
 
-class SVMRidgeRegression(SVMExperiment):
+class SVMAffine(SVMExperiment):
+    def __init__(self, train_site_name: str, test_site_name: str, c_values: [int],
+                 A1, b1, A2, b2, kernel: str = 'rbf', test_ratio: int = 0.15, logger = SVMLogger(),
+                 experiment_description="A@nyu + b affine", data_shape=(4, 16, 18), X_train = None,
+                 y_train = None, X_test = None, y_test = None, train_dir: str = None, test_dir: str = None):
+        self.A1 = A1
+        self.b1 = b1
+        self.A2 = A2
+        self.b2 = b2
+        super().__init__(train_site_name, test_site_name, c_values, kernel, test_ratio, logger,
+                         experiment_description=experiment_description, data_shape=data_shape, train_dir=train_dir,
+                         test_dir=test_dir, X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test)
 
-    experiment_description = 'Ridge Regression Transform'
-
-    def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
-                 lambda_: float, number_of_train_data_points=None, kernel: str = 'rbf',
-                 test_ratio: int = 0.15):
-        self.lambda_ = lambda_
-        self.number_of_train_data_points = number_of_train_data_points
-        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio)
-
-    def transform_data(self, train_data, test_data):
-        X_train, y_train, X_test, y_test = super().transform_data(train_data, test_data)
-        W = self.train_regression(X_train, X_test, y_train, y_test)
-        return X_train, y_train, X_test @ W, y_test
-
-    def train_regression(self, X_train, X_test, y_train, y_test):
+    def transform_data(self, X_train, y_train, X_test, y_test):
         X_train_ones = X_train[y_train == 1]
         X_train_twos = X_train[y_train == 2]
-        X_test_ones = X_test[y_test == 1]
-        X_test_twos = X_test[y_test == 2]
-        if self.number_of_train_data_points is None: self.number_of_train_data_points = np.min([X_train_ones.shape[0],
-                                                                                                X_test_ones.shape[0],
-                                                                                                X_train_twos.shape[0],
-                                                                                                X_test_twos.shape[0]])
-        print(f'{self.number_of_train_data_points} data points from each class are used for regression')
-        Y = np.concatenate(
-            [X_train_ones[0:self.number_of_train_data_points], X_train_twos[0:self.number_of_train_data_points]])
-        X = np.concatenate(
-            [X_test_ones[0:self.number_of_train_data_points], X_test_twos[0:self.number_of_train_data_points]])
+        # Transform the train set, do not transform the test set
+        X_train_ones = self.A1.dot(X_train_ones.transpose()) + self.b1
+        X_train_twos = self.A2.dot(X_train_twos.transpose()) + self.b2
+        X_train = np.concatenate([X_train_ones.T, X_train_twos.T])
 
-        I = np.ones(1152)
-        W = np.linalg.solve(a=X.T @ X + self.lambda_ * I, b=X.T @ Y) # p*p size matrix
-        return W
+        y_train_ones = np.ones(shape=X_train_ones.shape[1])
+        y_train_twos = np.ones(shape=X_train_twos.shape[1]) + 1
+        y_train = np.concatenate([y_train_ones, y_train_twos])
 
-    def train_svm(self, X_train, y_train, c: int):
-        mlflow.log_param(key='Regression num. of training data point from each class',
-                         value=self.number_of_train_data_points)
-        mlflow.log_param(key='lambda', value=self.lambda_)
-        return super().train_svm(X_train, y_train, c)
+        return X_train, y_train, X_test, y_test
 
+class SVMAffineWithoutClass(SVMExperiment):
+    def __init__(self, train_site_name: str, test_site_name: str, c_values: [int],
+                 A, b, kernel: str = 'rbf', test_ratio: int = 0.15, logger = SVMLogger(),
+                 experiment_description="A@nyu + b affine", data_shape=(4, 16, 18), X_train = None,
+                 y_train = None, X_test = None, y_test = None, train_dir: str = None, test_dir: str = None):
+        self.A = A
+        self.b = b
+        super().__init__(train_site_name, test_site_name, c_values, kernel, test_ratio, logger,
+                         experiment_description=experiment_description, data_shape=data_shape, train_dir=train_dir,
+                         test_dir=test_dir, X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test)
 
-
+    def transform_data(self, X_train, y_train, X_test, y_test):
+        return (self.A.dot(X_train.T) + self.b).T, y_train, X_test, y_test
 
 
 class SVMProcrustes(SVMExperiment):
-
     number_of_train_data_points = None
     experiment_description = 'Orthogonal Procrustes'
 
@@ -158,34 +158,4 @@ class SVMProcrustes(SVMExperiment):
         R, scale = orthogonal_procrustes(A=Matrix_to_be_mapped, B=Target_matrix)
 
         return X_train, y_train, X_test @ R, y_test
-
-        
-class SVMAffine(SVMExperiment):
-    def __init__(self, train_dir: str, test_dir: str, train_site_name: str, test_site_name: str, c_values: [int],
-                 A1, b1, A2, b2, kernel: str = 'rbf', test_ratio: int = 0.15, logger = SVMLogger(),
-                 experiment_description="A@nyu + b affine", data_shape=(4, 16, 18)):
-        self.A1 = A1
-        self.b1 = b1
-        self.A2 = A2
-        self.b2 = b2
-        super().__init__(train_dir, test_dir, train_site_name, test_site_name, c_values, kernel, test_ratio, logger,
-                         experiment_description=experiment_description, data_shape=data_shape)
-
-    def transform_data(self, train_data, test_data):
-        X_train, y_train, X_test, y_test = super().transform_data(train_data, test_data)
-        X_train_ones = X_train[y_train == 1]
-        X_train_twos = X_train[y_train == 2]
-        # Transform the train set, do not transform the test set
-        X_train_ones = self.A1.dot(X_train_ones.transpose()) + self.b1
-        X_train_twos = self.A2.dot(X_train_twos.transpose()) + self.b2
-        X_train = np.concatenate([X_train_ones.T, X_train_twos.T])
-
-        y_train_ones = np.ones(shape=X_train_ones.shape[1])
-        y_train_twos = np.ones(shape=X_train_twos.shape[1]) + 1
-        y_train = np.concatenate([y_train_ones, y_train_twos])
-
-        return X_train, y_train, X_test, y_test
-
-
-
 
