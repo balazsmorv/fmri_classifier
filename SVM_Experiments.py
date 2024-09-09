@@ -2,7 +2,7 @@ import numpy as np
 import os
 from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-from Data.Dataset import LatentFMRIDataset
+from Data.LatentDataset import LatentFMRIDataset
 import matplotlib.pyplot as plt
 import mlflow
 from datetime import datetime
