@@ -12,6 +12,8 @@ build/
 develop-eggs/
 dist/
 downloads/
+Data/MNIST
+MNIST-WBT/barycenter.npy
 eggs/
 .eggs/
 lib/
