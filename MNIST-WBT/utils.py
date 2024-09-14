@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 from sklearn.decomposition import PCA
 from einops import rearrange
 
@@ -145,4 +146,3 @@ def visualize_barycenter_diracs(barycenter, num_images, random_seed=42):
 
     plt.tight_layout()
     plt.show()
-
