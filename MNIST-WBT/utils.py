@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from sklearn.decomposition import PCA
 from einops import rearrange
-
+from sklearn.decomposition import PCA
+import plotly.graph_objects as go  # Import plotly for interactive 3D plotting
 
 def plot_pca_for_arrays(arrays, n_components, labels):
     """
@@ -15,42 +15,73 @@ def plot_pca_for_arrays(arrays, n_components, labels):
         labels (list of str): Labels for each array, used for coloring in the plot.
 
     Returns:
-        matplotlib.figure.Figure: A matplotlib figure showing the PCA results.
+        matplotlib.figure.Figure or plotly.graph_objs._figure.Figure:
+        A matplotlib figure (for 2D) or plotly figure (for 3D) showing the PCA results.
     """
     # Check that arrays and labels have the same length
     if len(arrays) != len(labels):
         raise ValueError("The number of arrays must match the number of labels.")
 
-    # Create a figure for plotting
-    fig, ax = plt.subplots()
+    # For 3D plotting with Plotly
+    if n_components == 3:
+        fig = go.Figure()  # Create a plotly figure for 3D plotting
 
-    # Perform PCA on each array
-    for array, label in zip(arrays, labels):
-        # Initialize PCA model
-        pca = PCA(n_components=n_components)
-        # Fit PCA model and transform data
-        transformed_data = pca.fit_transform(array)
+        # Perform PCA on each array and plot
+        for array, label in zip(arrays, labels):
+            pca = PCA(n_components=n_components)
+            transformed_data = pca.fit_transform(array)
 
-        # Plot the first two principal components
-        if n_components >= 2:
-            ax.scatter(transformed_data[:, 0], transformed_data[:, 1], label=label, alpha=0.6)
-        elif n_components == 1:
-            # If only one component, plot in 1D
-            ax.scatter(transformed_data[:, 0], [0] * len(transformed_data), label=label, alpha=0.6)
+            # Add the PCA data to the plotly figure
+            fig.add_trace(go.Scatter3d(
+                x=transformed_data[:, 0],
+                y=transformed_data[:, 1],
+                z=transformed_data[:, 2],
+                mode='markers',
+                marker=dict(size=5, opacity=0.8),
+                name=label
+            ))
 
-    # Customize the plot
-    ax.set_title(f'PCA of Input Arrays with {n_components} Principal Components')
-    ax.set_xlabel('Principal Component 1')
-    if n_components > 1:
-        ax.set_ylabel('Principal Component 2')
+        # Set plot titles and labels
+        fig.update_layout(
+            title=f'PCA of Input Arrays with {n_components} Principal Components',
+            scene=dict(
+                xaxis_title='Principal Component 1',
+                yaxis_title='Principal Component 2',
+                zaxis_title='Principal Component 3'
+            )
+        )
+        fig.show()  # Display the interactive 3D plot
+        return fig
+
+    # For 2D plotting with matplotlib
     else:
-        ax.set_yticks([])  # No y-axis for 1D
+        fig, ax = plt.subplots()  # Create a 2D plot with matplotlib
 
-    ax.legend()
-    ax.grid(True)
+        # Perform PCA on each array
+        for array, label in zip(arrays, labels):
+            pca = PCA(n_components=n_components)
+            transformed_data = pca.fit_transform(array)
 
-    return fig
+            # Plot the first two principal components
+            if n_components >= 2:
+                ax.scatter(transformed_data[:, 0], transformed_data[:, 1], label=label, alpha=0.6)
+            elif n_components == 1:
+                # If only one component, plot in 1D
+                ax.scatter(transformed_data[:, 0], [0] * len(transformed_data), label=label, alpha=0.6)
 
+        # Customize the plot
+        ax.set_title(f'PCA of Input Arrays with {n_components} Principal Components')
+        ax.set_xlabel('Principal Component 1')
+        if n_components > 1:
+            ax.set_ylabel('Principal Component 2')
+        if n_components == 1:
+            ax.set_yticks([])  # No y-axis for 1D
+
+        ax.legend()
+        ax.grid(True)
+
+        plt.show()  # Display the 2D plot
+        return fig
 
 def plot_images_from_datasets(datasets, num_images):
     """
@@ -92,12 +123,6 @@ def plot_images_from_datasets(datasets, num_images):
     # Adjust the layout
     plt.tight_layout()
     plt.show()
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 def visualize_barycenter_diracs(barycenter, num_images, random_seed=42):
     """
@@ -144,5 +169,15 @@ def visualize_barycenter_diracs(barycenter, num_images, random_seed=42):
             axarr[i].imshow(image, cmap='gray')
             axarr[i].axis('off')
 
+    plt.tight_layout()
+    plt.show()
+
+def plot_flattened_images(image_array, n = 5):
+    for image_set in image_array:
+        fig, axarr = plt.subplots(1, n)
+        for i in range(n):
+            image = image_set[i]
+            axarr[i].imshow(rearrange(image, '(h w) -> h w 1', h=28), cmap='Greys')
+            axarr[i].axis('off')
     plt.tight_layout()
     plt.show()

@@ -21,10 +21,7 @@ import numpy as np
 from ot.optim import cg
 from ot.utils import dist, unif, list_to_array, kernel, dots
 
-
-
-
-def joint_OT_mapping_linear(xs, xt, mu=1, eta=0.001, bias=False, verbose=False,
+def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose=False,
                             verbose2=False, numItermax=100, numInnerItermax=10,
                             stopInnerThr=1e-6, stopThr=1e-5, log=False,
                             **kwargs):
@@ -142,12 +139,21 @@ def joint_OT_mapping_linear(xs, xt, mu=1, eta=0.001, bias=False, verbose=False,
     a = unif(ns, type_as=xs)
     b = unif(nt, type_as=xt)
     M = dist(xs, xt) * ns
+    # Ötlet 2: legyenek a különböző classú minták nagyon távol egymástól
+    for c in [0, 1]:
+        idx_s = np.where((ys != c) & (ys != -1))[0]
+        idx_t = np.where(yt == c)[0]
+
+        for j in idx_t:
+            M[idx_s, j] = np.inf
     G = emd(a, b, M)
 
     vloss = []
 
     def loss(L, G):
         """Compute full loss"""
+        # Ötlet 1: If the coupling mtx assigns weight to non-matching class target sample, penalize
+        # Ha valamilyen thresholdnál több masst akarna rossz labelű mintába vinni akkor penalty
         return (
             nx.sum((nx.dot(xs1, L) - ns * nx.dot(G, xt)) ** 2)
             + mu * nx.sum(G * M)
