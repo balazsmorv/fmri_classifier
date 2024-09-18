@@ -23,7 +23,7 @@ from ot.utils import dist, unif, list_to_array, kernel, dots
 
 def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose=False,
                             verbose2=False, numItermax=100, numInnerItermax=10,
-                            stopInnerThr=1e-6, stopThr=1e-5, log=False,
+                            stopInnerThr=1e-6, stopThr=1e-5, log=False, class_reg = True,
                             **kwargs):
     r"""Joint OT and linear mapping estimation as proposed in
     :ref:`[8] <references-joint-OT-mapping-linear>`.
@@ -139,13 +139,17 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
     a = unif(ns, type_as=xs)
     b = unif(nt, type_as=xt)
     M = dist(xs, xt) * ns
+    M_ = M.clone().detach()
     # Ötlet 2: legyenek a különböző classú minták nagyon távol egymástól
-    for c in [0, 1]:
-        idx_s = np.where((ys != c) & (ys != -1))[0]
-        idx_t = np.where(yt == c)[0]
+    # Ez elvileg nem rontja el a konvexitást, mert nem függ sem gammától, sem L-től.
+    if class_reg:
+        for c in [2, 4]:
+            idx_s = np.where((ys != c) & (ys != -1))[0]
+            idx_t = np.where(yt == c)[0]
 
-        for j in idx_t:
-            M[idx_s, j] = np.inf
+            for j in idx_t:
+                M_[idx_s, j] = M.max() * 1.0001 # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
+    M = M_
     G = emd(a, b, M)
 
     vloss = []

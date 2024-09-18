@@ -4,6 +4,8 @@ import torch
 from einops import rearrange
 from sklearn.decomposition import PCA
 import plotly.graph_objects as go  # Import plotly for interactive 3D plotting
+from sklearn.svm import SVC
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 def plot_pca_for_arrays(arrays, n_components, labels):
     """
@@ -181,3 +183,19 @@ def plot_flattened_images(image_array, n = 5):
             axarr[i].axis('off')
     plt.tight_layout()
     plt.show()
+
+def test_svm(model, x, y, L=None, b=None):
+    if L is not None and b is not None:
+        test_predictions = model.predict(x @ L + b)
+    else:
+        test_predictions = model.predict(x)
+    cm = confusion_matrix(y, test_predictions, labels=model.classes_)
+    display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
+    display.plot()
+    tn, fp, fn, tp = cm.ravel()
+    metrics = {
+        'accuracy': ((tp + tn) / (tp + tn + fp + fn + 1e-6)),
+        'recall': (tp / (tp + fn + 1e-6)),
+        'precision': (tp / (tp + fp + 1e-6))
+    }
+    return metrics
