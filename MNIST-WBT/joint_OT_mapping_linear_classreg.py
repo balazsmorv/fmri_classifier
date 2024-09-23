@@ -7,24 +7,34 @@ Optimal Transport maps and variants
     use it you need to explicitly import :mod:`ot.mapping`
 """
 
-# Modifier: Balázs Tibor Morvay
-
-# Original Authors: Eloi Tanguy <eloi.tanguy@u-paris.fr>
-#                   Remi Flamary <remi.flamary@unice.fr>
-#
-# License: MIT License
 
 from ot.backend import get_backend, to_numpy
 from ot.lp import emd
 import numpy as np
-
+import mlflow
 from ot.optim import cg
 from ot.utils import dist, unif, list_to_array, kernel, dots
+import matplotlib.pyplot as plt
 
-def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose=False,
-                            verbose2=False, numItermax=100, numInnerItermax=10,
-                            stopInnerThr=1e-6, stopThr=1e-5, log=False, class_reg = True,
-                            **kwargs):
+
+def joint_OT_mapping_linear(
+    xs,
+    xt,
+    ys,
+    yt,
+    mu=1,
+    eta=0.001,
+    bias=False,
+    verbose=False,
+    verbose2=False,
+    numItermax=100,
+    numInnerItermax=10,
+    stopInnerThr=1e-6,
+    stopThr=1e-5,
+    log=False,
+    class_reg=True,
+    **kwargs
+):
     r"""Joint OT and linear mapping estimation as proposed in
     :ref:`[8] <references-joint-OT-mapping-linear>`.
 
@@ -109,6 +119,10 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
     ot.lp.emd : Unregularized OT
     ot.optim.cg : General regularized OT
 
+    Original Authors: Eloi Tanguy <eloi.tanguy@u-paris.fr>
+                    Remi Flamary <remi.flamary@unice.fr>
+    License: MIT License
+
     """
     xs, xt = list_to_array(xs, xt)
     nx = get_backend(xs, xt)
@@ -124,6 +138,7 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
 
         def sel(x):
             return x[:-1, :]
+
     else:
         xs1 = xs
         xstxs = nx.dot(xs1.T, xs1)
@@ -134,7 +149,7 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
             return x
 
     if log:
-        log = {'err': []}
+        log = {"err": []}
 
     a = unif(ns, type_as=xs)
     b = unif(nt, type_as=xt)
@@ -148,7 +163,9 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
             idx_t = np.where(yt == c)[0]
 
             for j in idx_t:
-                M_[idx_s, j] = M.max() * 1.0001 # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
+                M_[idx_s, j] = (
+                    M.max() * 1.0001
+                )  # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
     M = M_
     G = emd(a, b, M)
 
@@ -165,7 +182,7 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
         )
 
     def solve_L(G):
-        """ solve L problem with fixed G (least square)"""
+        """solve L problem with fixed G (least square)"""
         xst = ns * nx.dot(G, xt)
         return nx.solve(xstxs + eta * Id, nx.dot(xs1.T, xst) + eta * I0)
 
@@ -179,8 +196,17 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
         def df(G):
             return -2 * ns * nx.dot(xsi - ns * nx.dot(G, xt), xt.T)
 
-        G = cg(a, b, M, 1.0 / mu, f, df, G0=G0,
-               numItermax=numInnerItermax, stopThr=stopInnerThr)
+        G = cg(
+            a,
+            b,
+            M,
+            1.0 / mu,
+            f,
+            df,
+            G0=G0,
+            numItermax=numInnerItermax,
+            stopThr=stopInnerThr,
+        )
         return G
 
     L = solve_L(G)
@@ -188,9 +214,10 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
     vloss.append(loss(L, G))
 
     if verbose:
-        print('{:5s}|{:12s}|{:8s}'.format(
-            'It.', 'Loss', 'Delta loss') + '\n' + '-' * 32)
-        print('{:5d}|{:8e}|{:8e}'.format(0, vloss[-1], 0))
+        print(
+            "{:5s}|{:12s}|{:8s}".format("It.", "Loss", "Delta loss") + "\n" + "-" * 32
+        )
+        print("{:5d}|{:8e}|{:8e}".format(0, vloss[-1], 0))
 
     # init loop
     if numItermax > 0:
@@ -219,12 +246,65 @@ def joint_OT_mapping_linear(xs, xt, ys, yt, mu=1, eta=0.001, bias=False, verbose
 
         if verbose:
             if it % 20 == 0:
-                print('{:5s}|{:12s}|{:8s}'.format(
-                    'It.', 'Loss', 'Delta loss') + '\n' + '-' * 32)
-            print('{:5d}|{:8e}|{:8e}'.format(
-                it, vloss[-1], (vloss[-1] - vloss[-2]) / abs(vloss[-2])))
+                print(
+                    "{:5s}|{:12s}|{:8s}".format("It.", "Loss", "Delta loss")
+                    + "\n"
+                    + "-" * 32
+                )
+            print(
+                "{:5d}|{:8e}|{:8e}".format(
+                    it, vloss[-1], (vloss[-1] - vloss[-2]) / abs(vloss[-2])
+                )
+            )
     if log:
-        log['loss'] = vloss
+        log["loss"] = vloss
         return G, L, log
     else:
         return G, L
+
+
+def compute_joint_OT_mapping(
+    xs,
+    xt,
+    ys,
+    yt,
+    method="linear",
+    mu=1.0,
+    eta=1.0,
+    bias=True,
+    verbose=True,
+    numItermax=100000,
+    numInnerItermax=100000,
+    stopInnerThr=1e-10,
+    stopThr=1e-10,
+    log=False,
+    class_reg=True,
+):
+    G, L, loss = joint_OT_mapping_linear(
+        xs=xs,
+        xt=xt,
+        ys=ys,
+        yt=ys,
+        mu=mu,
+        eta=eta,
+        bias=bias,
+        verbose=verbose,
+        numItermax=numItermax,
+        numInnerItermax=numInnerItermax,
+        stopInnerThr=stopInnerThr,
+        stopThr=stopThr,
+        log=True,
+        class_reg=class_reg,
+    )
+
+    if log:
+        for i, entry in enumerate(loss["loss"]):
+            mlflow.log_metric("joint_ot_loss", value=entry, step=i)
+        fig, axarr = plt.subplots(1, 2)
+        axarr[0].imshow(G)
+        axarr[0].set_title("Coupling matrix")
+        axarr[1].imshow(L)
+        axarr[1].set_title("Linear transformation mtx")
+        mlflow.log_figure(fig, artifact_file="coupling_map.png")
+
+    return G, L, loss

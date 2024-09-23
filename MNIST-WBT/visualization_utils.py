@@ -1,11 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import torch
 from einops import rearrange
 from sklearn.decomposition import PCA
 import plotly.graph_objects as go  # Import plotly for interactive 3D plotting
-from sklearn.svm import SVC
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
 
 def plot_pca_for_arrays(arrays, n_components, labels):
     """
@@ -34,23 +32,25 @@ def plot_pca_for_arrays(arrays, n_components, labels):
             transformed_data = pca.fit_transform(array)
 
             # Add the PCA data to the plotly figure
-            fig.add_trace(go.Scatter3d(
-                x=transformed_data[:, 0],
-                y=transformed_data[:, 1],
-                z=transformed_data[:, 2],
-                mode='markers',
-                marker=dict(size=5, opacity=0.8),
-                name=label
-            ))
+            fig.add_trace(
+                go.Scatter3d(
+                    x=transformed_data[:, 0],
+                    y=transformed_data[:, 1],
+                    z=transformed_data[:, 2],
+                    mode="markers",
+                    marker=dict(size=5, opacity=0.8),
+                    name=label,
+                )
+            )
 
         # Set plot titles and labels
         fig.update_layout(
-            title=f'PCA of Input Arrays with {n_components} Principal Components',
+            title=f"PCA of Input Arrays with {n_components} Principal Components",
             scene=dict(
-                xaxis_title='Principal Component 1',
-                yaxis_title='Principal Component 2',
-                zaxis_title='Principal Component 3'
-            )
+                xaxis_title="Principal Component 1",
+                yaxis_title="Principal Component 2",
+                zaxis_title="Principal Component 3",
+            ),
         )
         fig.show()  # Display the interactive 3D plot
         return fig
@@ -66,16 +66,26 @@ def plot_pca_for_arrays(arrays, n_components, labels):
 
             # Plot the first two principal components
             if n_components >= 2:
-                ax.scatter(transformed_data[:, 0], transformed_data[:, 1], label=label, alpha=0.6)
+                ax.scatter(
+                    transformed_data[:, 0],
+                    transformed_data[:, 1],
+                    label=label,
+                    alpha=0.6,
+                )
             elif n_components == 1:
                 # If only one component, plot in 1D
-                ax.scatter(transformed_data[:, 0], [0] * len(transformed_data), label=label, alpha=0.6)
+                ax.scatter(
+                    transformed_data[:, 0],
+                    [0] * len(transformed_data),
+                    label=label,
+                    alpha=0.6,
+                )
 
         # Customize the plot
-        ax.set_title(f'PCA of Input Arrays with {n_components} Principal Components')
-        ax.set_xlabel('Principal Component 1')
+        ax.set_title(f"PCA of Input Arrays with {n_components} Principal Components")
+        ax.set_xlabel("Principal Component 1")
         if n_components > 1:
-            ax.set_ylabel('Principal Component 2')
+            ax.set_ylabel("Principal Component 2")
         if n_components == 1:
             ax.set_yticks([])  # No y-axis for 1D
 
@@ -85,46 +95,34 @@ def plot_pca_for_arrays(arrays, n_components, labels):
         plt.show()  # Display the 2D plot
         return fig
 
-def plot_images_from_datasets(datasets, num_images):
+
+def plot_images(img_tensor, num_to_plot=5):
     """
     Plots a specified number of images from multiple datasets.
 
     Args:
-        datasets (list): List of dataset objects from which to plot images.
-        num_images (int): Number of images to plot from each dataset.
+        img_tensor (tensor of shape (n_samples, 784))
+        num_to_plot (int): Number of images to plot from each dataset.
     """
     # Determine the number of rows (one per dataset) and columns (number of images)
-    num_rows = len(datasets)
-    num_cols = num_images
+    num_rows = 1
+    num_cols = num_to_plot
 
     # Create a grid layout dynamically
     f, axarr = plt.subplots(num_rows, num_cols, figsize=(4 * num_cols, 4 * num_rows))
 
-    # Ensure axarr is always a 2D array, even if num_rows or num_cols is 1
-    if num_rows == 1:
-        axarr = [axarr]  # If there's only one row, put it in a list
-    if num_cols == 1:
-        axarr = [[ax] for ax in axarr]  # If there's only one column, wrap each axis in a list
-
+    indices = np.random.choice(img_tensor.shape[0], num_to_plot, replace=True)
     # Plot the images
-    for row_idx, dataset in enumerate(datasets):
-        for col_idx in range(num_images):
-            # Get the image from the dataset without flattening it
-            image = dataset.__getitem__(col_idx, flatten=False)[0]
-            image_rearranged = rearrange(image, "c h w -> h w c")
-
-            # Plot the image in the corresponding subplot
-            axarr[row_idx][col_idx].imshow(image_rearranged)
-            axarr[row_idx][col_idx].set_title(f"Image {col_idx} from Dataset {row_idx + 1}")
-            axarr[row_idx][col_idx].axis('off')  # Hide axes
+    for i, index in enumerate(indices):
+        img = img_tensor[index]
+        image = rearrange(img, "(h w c) -> h w c", h=28, w=28, c=1)
+        axarr[i].imshow(image)
+        axarr[i].axis("off")  # Hide axes
 
     # Adjust the layout
     plt.tight_layout()
-    plt.show()
+    return f
 
-    # Adjust the layout
-    plt.tight_layout()
-    plt.show()
 
 def visualize_barycenter_diracs(barycenter, num_images, random_seed=42):
     """
@@ -153,7 +151,9 @@ def visualize_barycenter_diracs(barycenter, num_images, random_seed=42):
 
     # Check if the number of pixels forms a perfect square
     if image_size * image_size != num_pixels:
-        raise ValueError("The number of pixels does not form a perfect square. Ensure the image data is valid.")
+        raise ValueError(
+            "The number of pixels does not form a perfect square. Ensure the image data is valid."
+        )
 
     # Create subplots for the selected images
     fig, axarr = plt.subplots(1, num_images, figsize=(4 * num_images, 4))
@@ -165,37 +165,22 @@ def visualize_barycenter_diracs(barycenter, num_images, random_seed=42):
 
         # Handle single or multiple axes correctly
         if num_images == 1:
-            axarr.imshow(image, cmap='gray')
-            axarr.axis('off')
+            axarr.imshow(image, cmap="gray")
+            axarr.axis("off")
         else:
-            axarr[i].imshow(image, cmap='gray')
-            axarr[i].axis('off')
+            axarr[i].imshow(image, cmap="gray")
+            axarr[i].axis("off")
 
     plt.tight_layout()
-    plt.show()
+    return fig
 
-def plot_flattened_images(image_array, n = 5):
+
+def plot_flattened_images(image_array, n=5):
     for image_set in image_array:
         fig, axarr = plt.subplots(1, n)
         for i in range(n):
             image = image_set[i]
-            axarr[i].imshow(rearrange(image, '(h w) -> h w 1', h=28), cmap='Greys')
-            axarr[i].axis('off')
+            axarr[i].imshow(rearrange(image, "(h w) -> h w 1", h=28), cmap="Greys")
+            axarr[i].axis("off")
     plt.tight_layout()
     plt.show()
-
-def test_svm(model, x, y, L=None, b=None):
-    if L is not None and b is not None:
-        test_predictions = model.predict(x @ L + b)
-    else:
-        test_predictions = model.predict(x)
-    cm = confusion_matrix(y, test_predictions, labels=model.classes_)
-    display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
-    display.plot()
-    tn, fp, fn, tp = cm.ravel()
-    metrics = {
-        'accuracy': ((tp + tn) / (tp + tn + fp + fn + 1e-6)),
-        'recall': (tp / (tp + fn + 1e-6)),
-        'precision': (tp / (tp + fp + 1e-6))
-    }
-    return metrics
