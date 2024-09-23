@@ -1,5 +1,5 @@
 import ot
-from joint_OT_mapping_linear_classreg import compute_joint_OT_mapping
+from OT_utils.joint_OT_mapping_linear_classreg import compute_joint_OT_mapping
 import torch
 from SVM_utils import train_svm, test_svm
 from data_utils import setup_MNIST_dataset
