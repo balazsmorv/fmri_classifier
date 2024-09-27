@@ -96,7 +96,7 @@ def plot_pca_for_arrays(arrays, n_components, labels):
         return fig
 
 
-def plot_images(img_tensor, num_to_plot=5):
+def plot_images(img_tensor, h=28, w=28, num_to_plot=5):
     """
     Plots a specified number of images from multiple datasets.
 
@@ -115,7 +115,7 @@ def plot_images(img_tensor, num_to_plot=5):
     # Plot the images
     for i, index in enumerate(indices):
         img = img_tensor[index]
-        image = rearrange(img, "(h w c) -> h w c", h=28, w=28, c=1)
+        image = rearrange(img, "(h w c) -> h w c", h=h, w=w, c=1)
         axarr[i].imshow(image)
         axarr[i].axis("off")  # Hide axes
 
@@ -165,10 +165,10 @@ def visualize_barycenter_diracs(barycenter, num_images, random_seed=42):
 
         # Handle single or multiple axes correctly
         if num_images == 1:
-            axarr.imshow(image, cmap="gray")
+            axarr.imshow(image)
             axarr.axis("off")
         else:
-            axarr[i].imshow(image, cmap="gray")
+            axarr[i].imshow(image)
             axarr[i].axis("off")
 
     plt.tight_layout()

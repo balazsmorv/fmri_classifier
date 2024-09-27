@@ -29,7 +29,7 @@ def free_support_sinkhorn_barycenter(
     verbose=False,
     log=None,
     method="sinkhorn",
-    **kwargs
+    **kwargs,
 ):
     r"""
     Solves the free support (locations of the barycenters are optimized, not the weights) regularized Wasserstein barycenter problem (i.e. the weighted Frechet mean for the 2-Sinkhorn divergence), formally:
@@ -136,7 +136,9 @@ def free_support_sinkhorn_barycenter(
                 reg=reg,
                 numItermax=numInnerItermax,
                 method=method,
-                **kwargs
+                log=False,
+                verbose=False,
+                **kwargs,
             )
             T_sum = T_sum + weight_i * 1.0 / b[:, None] * nx.dot(
                 T_i, measure_locations_i
@@ -180,7 +182,7 @@ def joint_OT_mapping_linear(
     stopThr=1e-5,
     log=False,
     class_reg=True,
-    **kwargs
+    **kwargs,
 ):
     r"""Joint OT and linear mapping estimation as proposed in
     :ref:`[8] <references-joint-OT-mapping-linear>`.
@@ -427,6 +429,95 @@ def compute_joint_OT_mapping(
     log=False,
     class_reg=True,
 ):
+    r"""Joint OT and linear mapping estimation as proposed in
+    :ref:`[8] <references-joint-OT-mapping-linear>`.
+
+    The function solves the following optimization problem:
+
+    .. math::
+        \min_{\gamma,L}\quad \|L(\mathbf{X_s}) - n_s\gamma \mathbf{X_t} \|^2_F +
+          \mu \langle \gamma, \mathbf{M} \rangle_F + \eta \|L - \mathbf{I}\|^2_F
+
+        s.t. \ \gamma \mathbf{1} = \mathbf{a}
+
+             \gamma^T \mathbf{1} = \mathbf{b}
+
+             \gamma \geq 0
+
+    where :
+
+    - :math:`\mathbf{M}` is the (`ns`, `nt`) squared euclidean cost matrix between samples in
+      :math:`\mathbf{X_s}` and :math:`\mathbf{X_t}` (scaled by :math:`n_s`)
+    - :math:`L` is a :math:`d\times d` linear operator that approximates the barycentric
+      mapping
+    - :math:`\mathbf{I}` is the identity matrix (neutral linear mapping)
+    - :math:`\mathbf{a}` and :math:`\mathbf{b}` are uniform source and target weights
+
+    The problem consist in solving jointly an optimal transport matrix
+    :math:`\gamma` and a linear mapping that fits the barycentric mapping
+    :math:`n_s\gamma \mathbf{X_t}`.
+
+    One can also estimate a mapping with constant bias (see supplementary
+    material of :ref:`[8] <references-joint-OT-mapping-linear>`) using the bias optional argument.
+
+    The algorithm used for solving the problem is the block coordinate
+    descent that alternates between updates of :math:`\mathbf{G}` (using conditional gradient)
+    and the update of :math:`\mathbf{L}` using a classical least square solver.
+
+
+    Parameters
+    ----------
+    xs : array-like (ns,d)
+        samples in the source domain
+    xt : array-like (nt,d)
+        samples in the target domain
+    mu : float,optional
+        Weight for the linear OT loss (>0)
+    eta : float, optional
+        Regularization term  for the linear mapping L (>0)
+    bias : bool,optional
+        Estimate linear mapping with constant bias
+    numItermax : int, optional
+        Max number of BCD iterations
+    stopThr : float, optional
+        Stop threshold on relative loss decrease (>0)
+    numInnerItermax : int, optional
+        Max number of iterations (inner CG solver)
+    stopInnerThr : float, optional
+        Stop threshold on error (inner CG solver) (>0)
+    verbose : bool, optional
+        Print information along iterations
+    log : bool, optional
+        record log if True
+
+
+    Returns
+    -------
+    gamma : (ns, nt) array-like
+        Optimal transportation matrix for the given parameters
+    L : (d, d) array-like
+        Linear mapping matrix ((:math:`d+1`, `d`) if bias)
+    log : dict
+        log dictionary return only if log==True in parameters
+
+
+    .. _references-joint-OT-mapping-linear:
+    References
+    ----------
+    .. [8] M. Perrot, N. Courty, R. Flamary, A. Habrard,
+        "Mapping estimation for discrete optimal transport",
+        Neural Information Processing Systems (NIPS), 2016.
+
+    See Also
+    --------
+    ot.lp.emd : Unregularized OT
+    ot.optim.cg : General regularized OT
+
+    Original Authors: Eloi Tanguy <eloi.tanguy@u-paris.fr>
+                    Remi Flamary <remi.flamary@unice.fr>
+    License: MIT License
+
+    """
     G, L, loss = joint_OT_mapping_linear(
         xs=xs,
         xt=xt,
