@@ -806,7 +806,7 @@ def compute_joint_OT_mapping(
             log=True,
             class_reg=class_reg,
         )
-    elif method == "kernel":
+    elif method == "gaussian":
         G, L, loss = joint_OT_mapping_kernel(
             xs=xs,
             xt=xt,
