@@ -17,6 +17,7 @@ MNIST-WBT/barycenter.npy
 Office-Caltech/barycenter.npy
 Office-Caltech/barycenter 100 iter.npy
 Office-Caltech/data.pkl
+Office-Caltech/artifacts/
 eggs/
 .eggs/
 lib/
