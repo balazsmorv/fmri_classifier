@@ -431,6 +431,7 @@ def joint_OT_mapping_kernel(
     stopThr=1e-5,
     log=False,
     class_reg=True,
+    classes=None,
     **kwargs,
 ):
     r"""Joint OT and nonlinear mapping estimation with kernels as proposed in
@@ -525,6 +526,8 @@ def joint_OT_mapping_kernel(
     ot.optim.cg : General regularized OT
 
     """
+    if classes is None:
+        classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     xs, xt = list_to_array(xs, xt)
     nx = get_backend(xs, xt)
 
@@ -568,7 +571,7 @@ def joint_OT_mapping_kernel(
     # Ötlet 2: legyenek a különböző classú minták nagyon távol egymástól
     # Ez elvileg nem rontja el a konvexitást, mert nem függ sem gammától, sem L-től.
     if class_reg:
-        for c in [2, 4]:
+        for c in classes:
             idx_s = np.where((ys != c) & (ys != -1))[0]
             idx_t = np.where(yt == c)[0]
 
@@ -698,6 +701,7 @@ def compute_joint_OT_mapping(
     stopThr=1e-10,
     log=False,
     class_reg=True,
+    classes=None,
 ):
     r"""Joint OT and linear mapping estimation as proposed in
     :ref:`[8] <references-joint-OT-mapping-linear>`.
@@ -805,6 +809,7 @@ def compute_joint_OT_mapping(
             stopThr=stopThr,
             log=True,
             class_reg=class_reg,
+            classes=classes,
         )
     elif method == "gaussian":
         G, L, loss = joint_OT_mapping_kernel(
@@ -822,6 +827,7 @@ def compute_joint_OT_mapping(
             stopThr=stopThr,
             log=True,
             class_reg=class_reg,
+            classes=classes,
         )
 
     if log:
