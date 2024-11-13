@@ -12,7 +12,7 @@ from ot.lp import emd
 import numpy as np
 import mlflow
 from ot.optim import cg
-from ot import mapping
+from ot import mapping, sinkhorn
 from ot.utils import dist, unif, list_to_array, kernel, dots
 import matplotlib.pyplot as plt
 
@@ -579,7 +579,7 @@ def joint_OT_mapping_kernel(
                 M_[idx_s, j] = (
                     M.max() * 1.0001
                 )  # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
-    M = M_
+        M = M_
 
     G = emd(a, b, M)
 
@@ -624,6 +624,17 @@ def joint_OT_mapping_kernel(
             numItermax=numInnerItermax,
             stopThr=stopInnerThr,
         )
+        # G = ot.sinkhorn(
+        #     a,
+        #     b,
+        #     M,
+        #     mu,
+        #     "sinkhorn_log",
+        #     numitermax=numInnerItermax,
+        #     stopThr=stopInnerThr,
+        #     verbose=False,
+        # )
+
         return G
 
     if bias:
@@ -841,3 +852,168 @@ def compute_joint_OT_mapping(
         mlflow.log_figure(fig, artifact_file="coupling_map.png")
 
     return G, L, loss
+
+
+class OTDA(object):
+    """Class for domain adaptation with optimal transport as proposed in [5]
+
+
+    References
+    ----------
+
+    .. [5] N. Courty; R. Flamary; D. Tuia; A. Rakotomamonjy, "Optimal Transport for Domain Adaptation," in IEEE Transactions on Pattern Analysis and Machine Intelligence , vol.PP, no.99, pp.1-1
+
+    """
+
+    def __init__(self, metric="sqeuclidean"):
+        """Class initialization"""
+        self.xs = 0
+        self.xt = 0
+        self.G = 0
+        self.metric = metric
+        self.computed = False
+
+    def fit(self, xs, xt, ws=None, wt=None):
+        """Fit domain adaptation between samples is xs and xt (with optional weights)"""
+        self.xs = xs
+        self.xt = xt
+
+        if wt is None:
+            wt = unif(xt.shape[0])
+        if ws is None:
+            ws = unif(xs.shape[0])
+
+        self.ws = ws
+        self.wt = wt
+
+        self.M = dist(xs, xt, metric=self.metric)
+        self.G = emd(ws, wt, self.M)
+        self.computed = True
+
+    def interp(self, direction=1):
+        """Barycentric interpolation for the source (1) or target (-1) samples
+
+        This Barycentric interpolation solves for each source (resp target)
+        sample xs (resp xt) the following optimization problem:
+
+        .. math::
+            arg\min_x \sum_i \gamma_{k,i} c(x,x_i^t)
+
+        where k is the index of the sample in xs
+
+        For the moment only squared euclidean distance is provided but more
+        metric  could be used in the future.
+
+        """
+        if direction > 0:  # >0 then source to target
+            G = self.G
+            w = self.ws.reshape((self.xs.shape[0], 1))
+            x = self.xt
+        else:
+            G = self.G.T
+            w = self.wt.reshape((self.xt.shape[0], 1))
+            x = self.xs
+
+        if self.computed:
+            if self.metric == "sqeuclidean":
+                return np.dot(G / w, x)  # weighted mean
+            else:
+                print("Warning, metric not handled yet, using weighted average")
+                return np.dot(G / w, x)  # weighted mean
+                return None
+        else:
+            print("Warning, model not fitted yet, returning None")
+            return None
+
+    def predict(self, x, direction=1):
+        """Out of sample mapping using the formulation from [6]
+
+        For each sample x to map, it finds the nearest source sample xs and
+        map the samle x to the position xst+(x-xs) wher xst is the barycentric
+        interpolation of source sample xs.
+
+        References
+        ----------
+
+        .. [6] Ferradans, S., Papadakis, N., Peyré, G., & Aujol, J. F. (2014). Regularized discrete optimal transport. SIAM Journal on Imaging Sciences, 7(3), 1853-1882.
+
+        """
+        if direction > 0:  # >0 then source to target
+            xf = self.xt
+            x0 = self.xs
+        else:
+            xf = self.xs
+            x0 = self.xt
+
+        D0 = dist(x, x0)  # dist netween new samples an source
+        idx = np.argmin(D0, 1)  # closest one
+        xf = self.interp(direction)  # interp the source samples
+        return xf[idx, :] + x - x0[idx, :]  # aply the delta to the interpolation
+
+
+class OTDA_mapping_linear(OTDA):
+    """Class for optimal transport with joint linear mapping estimation as in [8]"""
+
+    def __init__(self):
+        """Class initialization"""
+
+        self.xs = 0
+        self.xt = 0
+        self.G = 0
+        self.L = 0
+        self.bias = False
+        self.computed = False
+        self.metric = "sqeuclidean"
+
+    def fit(self, xs, xt, mu=1, eta=1, bias=False, **kwargs):
+        """Fit domain adaptation between samples is xs and xt (with optional
+        weights)"""
+        self.xs = xs
+        self.xt = xt
+        self.bias = bias
+
+        self.ws = unif(xs.shape[0])
+        self.wt = unif(xt.shape[0])
+
+        self.G, self.L = joint_OT_mapping_linear(
+            xs, xt, mu=mu, eta=eta, bias=bias, **kwargs
+        )
+        self.computed = True
+
+    def mapping(self):
+        return lambda x: self.predict(x)
+
+
+class OTDA_mapping_kernel(OTDA_mapping_linear):
+    """Class for optimal transport with joint nonlinear mapping estimation as in [8]"""
+
+    def fit(
+        self, xs, xt, mu=1, eta=1, bias=False, kerneltype="gaussian", sigma=1, **kwargs
+    ):
+        """Fit domain adaptation between samples is xs and xt"""
+        self.xs = xs
+        self.xt = xt
+        self.bias = bias
+
+        self.ws = unif(xs.shape[0])
+        self.wt = unif(xt.shape[0])
+        self.kernel = kerneltype
+        self.sigma = sigma
+        self.kwargs = kwargs
+
+        self.G, self.L = joint_OT_mapping_kernel(
+            xs, xt, mu=mu, eta=eta, bias=bias, **kwargs
+        )
+        self.computed = True
+
+    def predict(self, x):
+        """Out of sample mapping estimated during the call to fit"""
+
+        if self.computed:
+            K = kernel(x, self.xs, method=self.kernel, sigma=self.sigma, **self.kwargs)
+            if self.bias:
+                K = np.hstack((K, np.ones((x.shape[0], 1))))
+            return K.dot(self.L)
+        else:
+            print("Warning, model not fitted yet, returning None")
+            return None

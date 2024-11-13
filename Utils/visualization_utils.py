@@ -38,7 +38,7 @@ def plot_pca_for_arrays(arrays, n_components, labels):
                     y=transformed_data[:, 1],
                     z=transformed_data[:, 2],
                     mode="markers",
-                    marker=dict(size=5, opacity=0.8),
+                    marker=dict(size=5, opacity=0.1),
                     name=label,
                 )
             )
@@ -70,7 +70,7 @@ def plot_pca_for_arrays(arrays, n_components, labels):
                     transformed_data[:, 0],
                     transformed_data[:, 1],
                     label=label,
-                    alpha=0.6,
+                    alpha=0.1,
                 )
             elif n_components == 1:
                 # If only one component, plot in 1D
@@ -78,7 +78,7 @@ def plot_pca_for_arrays(arrays, n_components, labels):
                     transformed_data[:, 0],
                     [0] * len(transformed_data),
                     label=label,
-                    alpha=0.6,
+                    alpha=0.1,
                 )
 
         # Customize the plot
