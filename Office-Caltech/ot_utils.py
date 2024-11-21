@@ -47,6 +47,7 @@ def dist_classreg(xs, xt, ys, yt, device="cpu"):
     M = ot.dist(xs, xt)
 
     M_ = M.clone()
+    # M_ /= M_.max()
     for c in torch.unique(ys):
         idx_s = torch.where((ys != c) & (ys != -1))[0]
         idx_t = torch.where(yt == c)[0]
