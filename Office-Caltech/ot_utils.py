@@ -8,6 +8,7 @@ def barycentric_mapping(xs, xt, xnew, coupling, batch_size=10):
 
     if torch.equal(xs, xnew):
         # perform standard barycentric mapping
+        print("barycentric mapping")
         transp = coupling / torch.sum(coupling, axis=1)[:, None]
 
         # set nans to 0
@@ -17,6 +18,7 @@ def barycentric_mapping(xs, xt, xnew, coupling, batch_size=10):
         transp_Xs = transp @ xt
     else:
         # perform out of sample mapping
+        print("out of sample mapping")
         indices = torch.arange(xnew.shape[0])
         batch_ind = [
             indices[i : i + batch_size] for i in range(0, len(indices), batch_size)
@@ -46,14 +48,14 @@ def barycentric_mapping(xs, xt, xnew, coupling, batch_size=10):
 def dist_classreg(xs, xt, ys, yt, device="cpu"):
     M = ot.dist(xs, xt)
 
-    M_ = M.clone()
-    # M_ /= M_.max()
+    M_max = M.max() * 1.0001
+
     for c in torch.unique(ys):
         idx_s = torch.where((ys != c) & (ys != -1))[0]
         idx_t = torch.where(yt == c)[0]
 
         for j in idx_t:
-            M_[idx_s, j] = (
-                M.max() * 1.0001
-            )  # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
-    return M_
+            M[idx_s, j] = (
+                M_max  # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
+            )
+    return M

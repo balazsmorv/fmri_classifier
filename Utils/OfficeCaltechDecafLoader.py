@@ -6,14 +6,14 @@ import matplotlib.pyplot as plt
 
 class OfficeCaltechDecafDataset:
 
-    def __init__(self, data_path: str, folds=False, standardize=False, scale=False):
-        self.X, self.y, self.m, self.fold_dict = self.load_data(
+    def __init__(self, data_path: str, standardize=False, scale=False):
+        self.X, self.y, self.m, self.fold_dict = self._load_data(
             data_path=data_path, standardize=standardize, scale=scale
         )
         self.domains = np.unique(self.m).astype(int)
         self.domain_names = ["Webcam", "Amazon", "dslr", "Caltech"]
 
-    def load_data(self, data_path: str, standardize=False, scale=False):
+    def _load_data(self, data_path: str, standardize=False, scale=False):
         dataset = np.load(os.path.join(data_path, "Objects_Decaf.npy"))
         with open(os.path.join(data_path, "Objects_crossval_index.json"), "r") as f:
             fold_dict = json.loads(f.read())

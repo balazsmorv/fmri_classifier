@@ -17,6 +17,20 @@ from ot.utils import dist, unif, list_to_array, kernel, dots
 import matplotlib.pyplot as plt
 
 
+def dist_classreg(xs, xt, ys, yt):
+    M = ot.dist(xs, xt)
+    M_max = M.max() * 1.0001
+    for c in np.unique(ys):
+        idx_s = np.where((ys != c) & (ys != -1))[0]
+        idx_t = np.where(yt == c)[0]
+
+        for j in idx_t:
+            M[idx_s, j] = (
+                M_max  # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
+            )
+    return M
+
+
 def free_support_sinkhorn_barycenter(
     measures_locations,
     measures_weights,
@@ -30,6 +44,8 @@ def free_support_sinkhorn_barycenter(
     verbose=False,
     log=None,
     method="sinkhorn",
+    measure_labels=None,
+    bary_labels=None,
     **kwargs,
 ):
     r"""
@@ -126,10 +142,16 @@ def free_support_sinkhorn_barycenter(
 
         T_sum = nx.zeros((k, d), type_as=X_init)
 
-        for measure_locations_i, measure_weights_i, weight_i in zip(
-            measures_locations, measures_weights, weights
+        for i, (measure_locations_i, measure_weights_i, weight_i) in enumerate(
+            zip(measures_locations, measures_weights, weights)
         ):
-            M_i = dist(X, measure_locations_i)
+            if measure_labels is not None and bary_labels is not None:
+                measure_labels_i = measure_labels[i]
+                M_i = dist_classreg(
+                    X, measure_locations_i, ys=bary_labels, yt=measure_labels_i
+                )
+            else:
+                M_i = dist(X, measure_locations_i)
             T_i = ot.bregman.sinkhorn(
                 b,
                 measure_weights_i,
@@ -523,19 +545,19 @@ def joint_OT_mapping_linear(
     a = unif(ns, type_as=xs)
     b = unif(nt, type_as=xt)
     M = dist(xs, xt) * ns
-    M_ = M.clone().detach()
+    M_max = M.max() * 1.0001
     # Ötlet 2: legyenek a különböző classú minták nagyon távol egymástól
     # Ez elvileg nem rontja el a konvexitást, mert nem függ sem gammától, sem L-től.
     if class_reg:
-        for c in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+        for c in nx.unique(ys):
             idx_s = np.where((ys != c) & (ys != -1))[0]
             idx_t = np.where(yt == c)[0]
 
             for j in idx_t:
-                M_[idx_s, j] = (
-                    M.max() * 1.0001
-                )  # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
-    M = M_
+                M[idx_s, j] = (
+                    M_max
+                    # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
+                )
     G = emd(a, b, M)
 
     vloss = []
@@ -786,7 +808,7 @@ def joint_OT_mapping_kernel(
     a = unif(ns, type_as=xs)
     b = unif(nt, type_as=xt)
     M = dist(xs, xt) * ns
-    M_ = M.clone().detach()
+    M_max = M.max() * 1.0001
     # Ötlet 2: legyenek a különböző classú minták nagyon távol egymástól
     # Ez elvileg nem rontja el a konvexitást, mert nem függ sem gammától, sem L-től.
     if class_reg:
@@ -795,10 +817,9 @@ def joint_OT_mapping_kernel(
             idx_t = np.where(yt == c)[0]
 
             for j in idx_t:
-                M_[idx_s, j] = (
-                    M.max() * 1.0001
-                )  # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
-        M = M_
+                M[idx_s, j] = (
+                    M_max  # Needed for numerical reasons (see: https://github.com/PythonOT/POT/issues/229#issuecomment-824616912)
+                )
 
     G = emd(a, b, M)
 
